@@ -1,0 +1,117 @@
+version: "3"
+
+services:
+  gitlab:
+    image: "gitlab/gitlab-ce:latest"
+    restart: always
+    container_name: gitlab_server
+    hostname: "gitlab_server"
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url ${EXTERNAL_URL}
+        letsencrypt["enabled"] = false
+
+        gitlab_rails["gitlab_email_enabled"] = true
+        gitlab_rails["gitlab_email_from"] = ${GITLAB_EMAIL_FROM}
+        gitlab_rails["gitlab_email_display_name"] = ${GITLAB_EMAIL_DISPLAY_NAME}
+
+        gitlab_rails["smtp_enable"] = true
+        gitlab_rails["smtp_address"] = ${SMTP_ADDRESS}
+        gitlab_rails["smtp_port"] = ${SMTP_PORT}
+        gitlab_rails["smtp_user_name"] = ${SMTP_USER_NAME}
+        gitlab_rails["smtp_password"] = ${SMTP_PASSWORD}
+        gitlab_rails["smtp_domain"] = ${SMTP_DOMAIN}
+        gitlab_rails["smtp_authentication"] = "login"
+        gitlab_rails["smtp_enable_starttls_auto"] = true
+        gitlab_rails["smtp_tls"] = true
+        gitlab_rails["smtp_openssl_verify_mode"] = "none"
+
+        nginx["enable"] = false
+        web_server["external_users"] = ["www-data"]
+        gitlab_workhorse["listen_network"] = "tcp"
+        gitlab_workhorse["listen_addr"] = "0.0.0.0:8181"
+        
+        unicorn["enable"] = false
+        puma["enable"] = true
+        puma["worker_process"] = ${PUMA_WORKER_PROCESS}
+        puma["worker_timeout"] = ${PUMA_WORKER_TIMEOUT}
+        puma["min_threads"] = 1
+        puma["max_threads"] = ${PUMA_WORKER_PROCESS}
+        puma["per_worker_max_memory_mb"] = ${PUMA_MAX_MEMORY}
+
+        postgresql["enable"] = false
+        gitlab_rails["db_adapter"] = "postgresql"
+        gitlab_rails["db_encoding"] = "utf8"
+        gitlab_rails["db_host"] = "gitlab_db"
+        gitlab_rails["db_port"] = 5432
+        gitlab_rails["db_username"] = ${DB_USERNAME}
+        gitlab_rails["db_password"] = ${DB_PASSWORD}
+
+        redis["enable"] = false
+        gitlab_rails["redis_host"] = "gitlab_redis"
+        gitlab_rails["redis_port"] = 6379
+
+        prometheus_monitoring["enable"] = false
+        redis_exporter["enable"] = false
+        postgres_exporter["enable"] = false
+        pgbouncer_exporter["enable"] = false
+        node_exporter["enable"] = false
+
+    ports:
+      - "172.18.0.1:8080:8181"
+      - "0.0.0.0:22:22"
+    volumes:
+      - config:/etc/gitlab
+      - logs:/var/log/gitlab
+      - data:/var/opt/gitlab
+    networks:
+      gitlab:
+        ipv4_address: "172.18.0.2"
+    depends_on:
+      - db
+      - redis
+
+  redis:
+    image: "redis:alpine"
+    hostname: gitlab_redis
+    restart: always
+    container_name: gitlab_redis
+    volumes:
+      - redis:/data
+    networks:
+      gitlab:
+        ipv4_address: "172.18.0.4"
+
+  db:
+    image: "postgres:alpine"
+    restart: always
+    hostname: gitlab_db
+    container_name: gitlab_db
+    volumes:
+      - db:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=gitlabhq_production
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    networks:
+      gitlab:
+        ipv4_address: "172.18.0.3"
+
+volumes:
+  db:
+  config:
+  logs:
+  data:
+  redis:
+
+networks:
+  gitlab:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.bridge.name: "gitlab"
+      com.docker.network.bridge.host_binding_ipv4: "172.18.0.1"
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.18.0.0/16"
