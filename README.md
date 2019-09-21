@@ -1,6 +1,8 @@
 # Gitlab docker
 This is an example of how to configure a Gitlab server by separating some of the integrated components.
 
+You need to have a working **NGINX** server to proxy at **172.19.0.1: 8080**.
+
 ## How to run
 ```
 git clone git@github.com:0xFAD/gitlab-docker.git
